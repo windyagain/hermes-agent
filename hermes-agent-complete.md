@@ -43,8 +43,6 @@
 
 ---
 
-## 
-
 ### 1.2 为什么会有它
 
 现有 Agent 工具有三个共同痛点：每次对话都是白板（经验无法跨会话积累）、深度绑定特定模型或平台（换模型要改大量代码）、只能在本地跑（无法在服务器后台长时间运行同时用手机查看进度）。
@@ -96,52 +94,34 @@ flowchart LR
 
 ### 1.5 它和同类工具的关系
 
-这三个工具不是竞争关系，解决的是不同层面的问题：
-
-- **Claude Code** 做交互式编码。你坐在终端前，和它来回对话，实时协作。它是你的结对工程师。
-- **OpenClaw** 做配置即行为。你写一个 SOUL.md，它就变成你想要的样子。配置透明，生态成熟，ClawHub 有 44000+ 社区 Skill。
-- **Hermes** 做自主后台 + 自改进。你不需要坐在它旁边。它自己跑，自己学，自己进化。24/7 在线，通过 Telegram 或 Discord 随时可达。
-
-一个有意思的点：这三个工具都采用 agentskills.io 标准，**Skill 可以互通**。你在 Claude Code 里写的 Skill，Hermes 也能用，反过来也一样。它们更像是一个生态里分工不同的三个角色。
-
-
-
-#### Hermes vs OpenClaw 详细对比
+三个工具定位不同，不是竞争关系：Claude Code 做交互式编码（结对工程师）、OpenClaw 做配置即行为（写 SOUL.md 定制行为）、Hermes 做自主后台 + 自改进（7×24 自己跑自己学）。三者都采用 agentskills.io 标准，**Skill 可以互通**。
 
 | 维度 | Hermes Agent | OpenClaw |
 |---|---|---|
 | **核心理念** | 自改进学习循环 | 配置即行为（SOUL.md） |
-| **记忆** | 三层自改进（会话/持久/Skill） | 多层记忆（Daily Logs/MEMORY.md/语义搜索），人工维护为主 |
+| **记忆** | 三层自改进（会话/持久/Skill） | 多层记忆，人工维护为主 |
 | **Skill 维护** | Agent 自动创建 + 自改进 | 人工编写和维护 |
-| **用户建模** | Honcho 辩证建模（多维身份推断） | 基于 SOUL.md 配置 |
-| **多平台接入** | 15+ 平台 Gateway | 50+ 消息平台 |
+| **用户建模** | Honcho 辩证建模 | 基于 SOUL.md 配置 |
 | **生态规模** | 40+ 内置工具 + MCP 6000+ | ClawHub 44000+ 社区 Skill |
 | **部署方式** | 自托管（$5 VPS 起） | 官方托管/自托管 |
-| **Skill 互通** | 均采用 agentskills.io 标准 | ← 同左 |
 
-差距最大的两个维度是**学习能力**和**用户建模**。OpenClaw 的 Skill 主要靠人工编写和调整，它的进化依赖社区和用户的主动维护。Hermes 用得越久，Skill 越精准，记忆越深，做事越顺手。
-
-但 OpenClaw 也有 Hermes 比不了的地方：生态成熟度。ClawHub 上 44000+ 社区 Skill，各种场景都有现成方案。Hermes 的社区还在早期阶段。
-
-一句话区分：**OpenClaw 是你养出来的龙虾，Hermes 是自己会长大的龙虾。** 一个靠你用心喂养，一个靠自己从经验中学习。
+OpenClaw 生态更成熟，Hermes 学习能力更强。一句话区分：**OpenClaw 是你养出来的龙虾，Hermes 是自己会长大的龙虾。**
 
 #### Harness Engineering：理解 Hermes 的钥匙
 
-Hermes 是 **Harness Engineering** 概念的第一次产品化。Harness Engineering 的核心洞察是：AI 的瓶颈不是模型，是环境——同一个模型，只调整周围的"缰绳"配置，成绩可以从 Top 30 跳到 Top 5，模型一行没改。
+Hermes 是 **Harness Engineering** 概念的第一次产品化。核心洞察：AI 的瓶颈不是模型，是环境——同一个模型只调整"缰绳"配置，成绩可以从 Top 30 跳到 Top 5，模型一行没改。
 
-Harness Engineering 把这套方法论拆成五个组件，Hermes 把它们全部内建了：
+Harness Engineering 把方法论拆成五个组件，Hermes 把它们全部内建：
 
 | Harness 五组件 | 手动实现方式 | Hermes 内建系统 |
 |---|---|---|
-| **指令层** | 手写 CLAUDE.md / AGENTS.md | Skill 系统（markdown skill 文件，自动创建 + 自改进） |
-| **约束层** | 配置 hooks / linter / CI | Tool permissions + sandbox + toolset 按需启用 |
-| **反馈层** | 人工审查 / 评估者 | Agent 自改进学习循环（完成任务后自动复盘优化） |
-| **记忆层** | 手动维护 knowledge base | 三层记忆（会话/持久/Skill）+ Honcho 用户建模 |
+| **指令层** | 手写 CLAUDE.md / AGENTS.md | Skill 系统（自动创建 + 自改进） |
+| **约束层** | 配置 hooks / linter / CI | Tool permissions + toolset 按需启用 |
+| **反馈层** | 人工审查 / 评估者 | Agent 自改进学习循环 |
+| **记忆层** | 手动维护 knowledge base | 三层记忆 + Honcho 用户建模 |
 | **编排层** | 自己搭多 Agent pipeline | 子 Agent 委派 + cron 调度 |
 
-左边全是手动操作，你得是一个有经验的工程师才能搭出来。右边是开箱即用，装完就有。
-
-如果你用过 Claude Code 的 CLAUDE.md + hooks + memory，你已经在手动实现 Harness 了。Hermes 做的事情是把这套手动流程变成了一个自动运行的系统。从「你给 AI 造缰绳」变成「AI 自己给自己造缰绳」。
+如果你用过 Claude Code 的 CLAUDE.md + hooks + memory，你已经在手动实现 Harness 了。Hermes 把这套手动流程变成了自动运行的系统。
 
 ---
 
@@ -344,29 +324,20 @@ Hermes 的解法是**三层分离 + 按需检索**：不同类型的记忆用不
 ```mermaid
 flowchart LR
     subgraph L1["🗂 第一层：会话记忆"]
-        direction TB
-        A1["存什么"] --> A2["所有对话 · 工具调用 · 工具结果"]
-        A3["存哪里"] --> A4["state.db（SQLite）"]
-        A5["怎么用"] --> A6["不自动注入\nLLM 主动调用 session_search\nFTS5 按需检索"]
+        A1["存储：state.db SQLite\n内容：所有对话 · 工具调用 · 工具结果\n注入：不自动注入\n召回：LLM 调用 session_search 按需检索"]
     end
 
     subgraph L2["🧠 第二层：持久记忆"]
-        direction TB
-        B1["存什么"] --> B2["编码偏好 · 项目习惯 · 工具链"]
-        B3["存哪里"] --> B4["MEMORY.md + USER.md"]
-        B5["怎么用"] --> B6["全量注入 System Prompt\n每轮对话后自动更新"]
+        B1["存储：MEMORY.md + USER.md\n内容：编码偏好 · 项目习惯 · 工具链\n注入：全量注入 System Prompt\n更新：每轮对话后自动写入"]
     end
 
     subgraph L3["⚡ 第三层：Skill 记忆"]
-        direction TB
-        C1["存什么"] --> C2["方法论 · 操作规范 · 工作流"]
-        C3["存哪里"] --> C4["~/.hermes/skills/*.md"]
-        C5["怎么用"] --> C6["索引注入 System Prompt\nLLM 主动调用 skill_view\n加载完整内容"]
+        C1["存储：~/.hermes/skills/*.md\n内容：方法论 · 操作规范 · 工作流\n注入：索引注入 System Prompt\n召回：LLM 调用 skill_view 加载内容"]
     end
 
-    L1 -.->|"按需检索"| SP["System Prompt\n最终注入 LLM"]
-    L2 -->|"全量注入"| SP
-    L3 -.->|"索引 + 按需加载"| SP
+    L1 -. "按需检索" .-> SP["System Prompt\n最终注入 LLM"]
+    L2 -- "全量注入" --> SP
+    L3 -. "索引+按需" .-> SP
 
     style L1 fill:#0d1b2a,stroke:#4a9eff,color:#c8d8e8
     style L2 fill:#0d2a1a,stroke:#4ade80,color:#c8e8d0
@@ -388,27 +359,24 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    MSG(["💬 新消息到达"]) --> SP
+    MSG(["💬 新消息到达"]) --> SP["agent/prompt_builder.py\n构建 System Prompt"]
 
-    subgraph BUILD["System Prompt 构建阶段"]
-        SP["agent/prompt_builder.py"]
-        SP --> SK["技能索引注入\n只有名称+描述\n不含完整内容"]
-        SP --> MEM["prefetch_all()\nagent/memory_manager.py"]
-        MEM --> P1["持久记忆全量注入\nMEMORY.md + USER.md"]
-        MEM --> P2["外部提供商语义召回\nhoncho / mem0\n按相关性，非全量"]
-    end
+    SP --> SK["技能索引注入\n只有名称+描述，不含完整内容"]
+    SP --> MEM["prefetch_all()\nagent/memory_manager.py"]
+    MEM --> P1["持久记忆全量注入\nMEMORY.md + USER.md"]
+    MEM --> P2["外部提供商语义召回\nhoncho / mem0 按相关性"]
 
-    SK --> FINAL["📋 最终 System Prompt"]
+    SK --> FINAL["📋 最终 System Prompt\n身份 + 技能索引 + 记忆块 + 环境信息"]
     P1 --> FINAL
     P2 --> FINAL
 
     FINAL --> LLM["🤖 LLM 推理"]
 
-    LLM --> T1["需要技能详情？\nskill_view(name)\n加载完整 SKILL.md"]
-    LLM --> T2["需要历史经验？\nsession_search(query)\nFTS5 检索 state.db\n返回命中 + Bookend 上下文"]
-    LLM --> T3["直接回答"]
+    LLM --> T1["skill_view(name)\n加载完整 SKILL.md"]
+    LLM --> T2["session_search(query)\nFTS5 检索 state.db\n命中片段 + Bookend 上下文"]
+    LLM --> T3["直接生成回答"]
 
-    T1 --> ANS(["✅ 生成回答"])
+    T1 --> ANS(["✅ 最终回答"])
     T2 --> ANS
     T3 --> ANS
 
@@ -450,6 +418,25 @@ CREATE VIRTUAL TABLE messages_fts_trigram USING fts5(
 - 会话结尾几条（了解结论）
 
 一次搜索获得完整上下文，而不需要加载整个会话。这是 Hermes 能在不撑爆上下文的情况下实现跨会话记忆的核心机制。
+
+#### 和 Claude Code 记忆系统的对比
+
+Claude Code 也有记忆系统：CLAUDE.md 文件和 auto-memory。两者的设计哲学完全不同：
+
+| 维度 | Claude Code | Hermes Agent |
+|---|---|---|
+| **记忆格式** | CLAUDE.md + auto-memory 文本文件 | SQLite 数据库 + FTS5 索引 + Skill 文件 |
+| **写入方式** | CLAUDE.md 手动写，auto-memory 半自动 | 全自动写入，人可以随时覆盖 |
+| **检索方式** | 启动时全量加载 CLAUDE.md | 按需 FTS5 全文检索 |
+| **记忆粒度** | 项目级（每个项目一份 CLAUDE.md） | 全局级 + 项目级都有 |
+| **用户建模** | 无（需要用户自己写偏好） | Honcho 自动推理用户画像 |
+| **程序性记忆** | CLAUDE.md 中的指令 | 独立 Skill 文件，可自改进 |
+| **跨项目共享** | `~/.claude/CLAUDE.md`（全局指令文件） | 所有记忆天然全局 |
+| **存储上限** | CLAUDE.md 建议控制在几 KB | SQLite 理论上限很高 |
+
+**两者的设计哲学不同**：Claude Code 的 CLAUDE.md 是人编写、AI 执行的模式，好处是人有完全的控制权，坏处是需要持续投入维护。Hermes 是 AI 自写、人审核的模式，好处是门槛低、自动化程度高，坏处是自动生成的内容不一定都准确。
+
+**哪种更好取决于使用场景**：如果你是重度 Claude Code 用户，已经花了几周精心打磨 CLAUDE.md，那你手工编织的缰绳可能比 Hermes 自动生成的更精准。但如果你不想花时间维护配置文件，Hermes 的全自动方案确实省心不少。
 
 ---
 
@@ -526,31 +513,6 @@ AI Agent 落地企业最大的障碍是**不可控**：无限循环、乱删数�
 _YOLO_MODE_FROZEN = is_truthy_value(os.getenv("HERMES_YOLO_MODE", ""))
 ```
 如果每次调用都读取环境变量，一个恶意 skill 可以在运行时 `os.environ["HERMES_YOLO_MODE"] = "1"` 来绕过所有审批。冻结后，这个攻击路径被彻底关闭。
-
----
-
-### 3.5 供应链安全：litellm 事件的教训
-
-2026 年 5 月，Mini Shai-Hulud 蠕虫事件（通过恶意 PyPI 包传播）后，Hermes 建立了严格的依赖锁定策略：
-
-```toml
-# pyproject.toml — 所有依赖精确锁定
-"openai==2.24.0"
-"httpx[socks]==0.28.1"
-```
-
-```yaml
-# GitHub Actions — 锁定到 commit SHA，而不是版本标签
-uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
-# 版本标签可以被重新指向，SHA 不能
-```
-
-| 依赖类型 | 处理方式 | 示例 |
-|---|---|---|
-| PyPI 包 | `>=floor,<next_major` | `"httpx>=0.28.1,<1"` |
-| Git URL | Commit SHA | `git+https://...@<40-char-sha>` |
-| GitHub Actions | Commit SHA + 注释 | `uses: actions/checkout@<sha>  # v4` |
-| CI-only pip | `==exact` | `pyyaml==6.0.2` |
 
 ---
 
