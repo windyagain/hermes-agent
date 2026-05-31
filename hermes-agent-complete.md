@@ -67,30 +67,121 @@ Telegram · Discord · Slack · WhatsApp · Signal · 飞书 · 钉钉 · 企业
 
 ### 1.4 一个简单的闭环系统
 
-Hermes 的架构可以用一条线串起来：
-
-```
-学习循环 → 三层记忆 → Skill 系统 → 40+ 工具 → 多平台 Gateway
-```
-
-其中最核心的是**学习循环**，五个环节形成一个持续改进的飞轮：
+Hermes 的核心模块不是一条线性流程，而是一个**多入口、多记忆层、有反馈循环**的系统：
 
 ```mermaid
-flowchart LR
-    A["策划记忆\n每轮对话后\n主动决定记什么"] --> B["创建 Skill\n复杂任务完成后\n自动提炼方法论"]
-    B --> C["Skill 自改进\n使用中收到反馈\n自动 patch Skill 文件"]
-    C --> D["FTS5 召回\n新对话开始前\n按需检索历史经验"]
-    D --> E["用户建模\nHoncho 推理\n偏好和行为模式"]
-    E --> A
+flowchart TB
+    subgraph ENTRY["入口层"]
+        CLI["💻 CLI / TUI"]
+        GW["📡 Gateway 15+ 消息平台"]
+        CRON["⏰ Cron / Kanban 定时任务/持久队列"]
+    end
 
-    style A fill:#1a2a3e,stroke:#4a9eff,color:#e8e8f0
-    style B fill:#1a2a1e,stroke:#4ade80,color:#e8e8f0
-    style C fill:#2a1a1e,stroke:#fb923c,color:#e8e8f0
-    style D fill:#2a1a3e,stroke:#7c5cbf,color:#e8e8f0
-    style E fill:#1a2a2e,stroke:#FFD700,color:#e8e8f0
+    CORE["🧠 Agent 核心<br/>对话循环 · System Prompt 构建 · LLM 调用 · 工具调度"]
+
+    subgraph MEM["📚 三层记忆 + 用户建模"]
+        M1["会话记忆<br/>SQLite + FTS5"]
+        M2["持久记忆<br/>MEMORY.md"]
+        M3["Skill 记忆<br/>~/.hermes/skills/"]
+        M4["用户建模<br/>Honcho 可选"]
+    end
+
+    subgraph TOOL["🛠 40+ 工具"]
+        T1["网络<br/>搜索/抓取/浏览器"]
+        T2["终端<br/>执行/文件"]
+        T3["视觉<br/>分析/生成"]
+        T4["代码<br/>执行/委派"]
+    end
+
+    LEARN["🔄 学习循环<br/>每轮对话后异步复盘<br/>Background Review + Curator"]
+
+    ENTRY --> CORE
+    MEM -.->|"注入 / 召回"| CORE
+    CORE -.->|"调用"| TOOL
+    CORE -->|"对话结束"| LEARN
+    LEARN -.->|"沉淀经验"| MEM
+
+    classDef coreNode fill:#e8f4ff,stroke:#1e6091,color:#0a1929,font-weight:bold
+    classDef memNode fill:#f5fff5,stroke:#1f6b1f,color:#0a290a
+    classDef toolNode fill:#fff5e8,stroke:#a85d00,color:#291600
+    classDef entryNode fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29
+    classDef learnNode fill:#fff8d6,stroke:#8a6a00,color:#332600,font-weight:bold
+
+    class CORE coreNode
+    class M1,M2,M3,M4 memNode
+    class T1,T2,T3,T4 toolNode
+    class CLI,GW,CRON entryNode
+    class LEARN learnNode
+
+    style ENTRY fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29
+    style MEM fill:#f5fff5,stroke:#1f6b1f,color:#0a290a
+    style TOOL fill:#fff5e8,stroke:#a85d00,color:#291600
 ```
 
-记忆提供了 Skill 创建的素材，Skill 在使用中积累反馈触发自改进，FTS5 让历史经验被精准召回，用户建模把这些碎片拼成一幅完整的画。**用得越多，每个环节都在变强，而且是同时变强。**
+**入口层**（多入口）：CLI、Gateway、Cron 都是平等的入口，不是顺序关系。在 Telegram 发的消息和在命令行发的消息进入的是同一个 Agent 核心。
+
+**Agent 核心**（对话循环）：负责构建 System Prompt、调用 LLM、调度工具，是所有入口共享的执行引擎。
+
+**三层记忆 + 用户建模**：在每次对话开始时被注入到 System Prompt（持久记忆全量、Skill 索引、Honcho 画像），在对话过程中按需召回（会话记忆通过 FTS5 检索）。
+
+**40+ 工具**：Agent 的"手脚"，按 toolset 分组，每个会话可以启用不同的子集。
+
+**学习循环**：横跨整个系统的反馈机制，每次对话结束后由 Background Review 异步分析，把经验沉淀回三层记忆。这是 Hermes 区别于其他 Agent 的关键——记忆不是被动写入的，是主动复盘提炼的。
+
+#### 学习循环的内部流转
+
+放大看学习循环这一环，它由"沉淀"和"召回"两个反向流程组成：对话产生的经验沉淀进记忆库（向下），新对话开始时按需召回（向上），形成持续改进的飞轮。
+
+```mermaid
+flowchart TB
+    CONV(["💬 对话进行中"])
+
+    subgraph 沉淀["⬇️ 沉淀（每轮对话后）"]
+        S1["策划记忆<br/>主动决定记什么"]
+        S2["创建 Skill<br/>复杂任务完成后<br/>自动提炼方法论"]
+        S3["Skill 自改进<br/>使用中收到反馈<br/>自动 patch Skill 文件"]
+        S4["用户建模<br/>Honcho 推理<br/>偏好和行为模式"]
+    end
+
+    MEM[("📚 记忆库<br/>SQLite + MEMORY.md + ~/.hermes/skills/")]
+
+    subgraph 召回["⬆️ 召回（新对话开始时）"]
+        R1["持久记忆<br/>全量注入"]
+        R2["Skill 索引<br/>注入名称+描述"]
+        R3["FTS5 检索<br/>按需召回历史片段"]
+        R4["用户画像<br/>语义召回"]
+    end
+
+    NEXT(["🚀 新对话开始"])
+
+    CONV --> S1 --> MEM
+    CONV --> S2 --> MEM
+    CONV --> S3 --> MEM
+    CONV --> S4 --> MEM
+    MEM --> R1 --> NEXT
+    MEM --> R2 --> NEXT
+    MEM --> R3 --> NEXT
+    MEM --> R4 --> NEXT
+
+    classDef stage fill:#e8f4ff,stroke:#1e6091,color:#0a1929,font-weight:bold
+    classDef sink fill:#e8ffe8,stroke:#1f6b1f,color:#0a290a
+    classDef source fill:#f3e8ff,stroke:#5a2a9b,color:#1a0a29
+    classDef store fill:#fff8d6,stroke:#8a6a00,color:#332600,font-weight:bold
+
+    class CONV,NEXT stage
+    class S1,S2,S3,S4 sink
+    class R1,R2,R3,R4 source
+    class MEM store
+
+    style 沉淀 fill:#f5fff5,stroke:#1f6b1f,color:#0a290a
+    style 召回 fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29
+```
+
+**沉淀**是经验从对话流入记忆库：每轮对话后主动复盘，决定写入什么持久记忆、提炼什么 Skill、是否需要 patch 已有 Skill、Honcho 如何更新用户画像。
+
+**召回**是经验从记忆库流回新对话：持久记忆和 Skill 索引在 system prompt 构建时全量注入；Skill 完整内容、会话历史片段在 LLM 推理过程中按需调用工具检索。
+
+这套机制让 Hermes 既能把经验沉淀成结构化的记忆库（沉淀环节），又能在不撑爆上下文的前提下精准复用（召回环节）。**用得越多，记忆库越丰富，召回越精准，沉淀也更有的放矢——四件事同时变强**。
 
 ### 1.5 它和同类工具的关系
 
@@ -220,7 +311,7 @@ LLM 实际看到的工具列表（每次对话可以不同）
 4. LLM 返回工具调用
         ↓
 5. handle_function_call() 执行工具
-   → 危险命令检查（12 个硬封锁 + 47 个危险模式）
+   → 危险命令审批检查（详见 3.6）
    → 调用具体工具，返回 JSON 结果
         ↓
 6. 工具结果追加到消息历史，重新调用 LLM
@@ -229,7 +320,7 @@ LLM 实际看到的工具列表（每次对话可以不同）
 7. LLM 生成最终回答，Gateway 发回平台
         ↓
 8. [后台 daemon 线程，用户不感知]
-   Background Review Fork 启动
+   Background Review 启动
    → 分析对话，决定是否创建/更新技能或写入记忆
 ```
 
@@ -252,7 +343,7 @@ LLM 实际看到的工具列表（每次对话可以不同）
 
 每次对话都是白板，经验无法积累。
 
-#### Hermes 的解法：Background Review Fork
+#### Hermes 的解法：Background Review
 
 每次对话结束后，Hermes 会在后台悄悄做一件事：
 
@@ -261,7 +352,7 @@ LLM 实际看到的工具列表（每次对话可以不同）
         ↓
 [后台 daemon 线程启动，用户不感知]
         ↓
-fork 一个新的 Agent 实例
+启动一个独立的 Review Agent 实例
 → 给它看刚才的完整对话记录
 → 问它："这次对话有没有值得保存的技能？"
         ↓
@@ -281,7 +372,7 @@ Review Agent 分析对话
 ```
 第 1 次：创建技能 "Python 依赖冲突处理"
 第 3 次：用户说"你漏了检查虚拟环境这一步"
-         → Review Fork 自动 patch 技能，补上这一步
+         → Review Agent 自动 patch 技能，补上这一步
 第 10 次：技能已经包含了 10 次对话积累的经验
 ```
 
@@ -294,29 +385,97 @@ Review Agent 的 Prompt 明确要求优先 **patch 已有技能**，而不是无
 4. 新建技能（最后手段）
 ```
 
+#### Skill 索引：让大模型从几百个技能里精准选择
+
+技能库膨胀到几百个 SKILL 文件后，怎么让 LLM 在不爆炸上下文的前提下找到合适的那一个？Hermes 的答案是 **索引 + 按需加载**。
+
+每次构建 system prompt 时，Hermes 扫描所有 SKILL.md，**只提取每个技能的名字 + 60 字以内的描述**，按 category 分组组装成一个紧凑列表注入：
+
+```
+## Skills (mandatory)
+
+<available_skills>
+  github:
+    - pr-review: Reviews PR changes against contributing guidelines.
+    - issue-triage: Classifies issues by severity and component.
+  python:
+    - dependency-conflicts: Resolves uv/pip dependency clashes.
+    ...
+</available_skills>
+```
+
+按一个技能描述 ~50 字符算，**1000 个技能也只占约 5 万字符（约 12K token）**，远未撑爆上下文。LLM 看到索引后，根据当前任务判断哪个技能相关，主动调用 `skill_view(name)` 加载完整内容。这是经典的 "索引 + lazy load" 模式。
+
+实际系统还做了几层过滤进一步收缩索引：
+
+- **平台过滤**：标记为 `platforms: [macos]` 的技能在 Linux 平台不会出现
+- **工具/toolset 条件过滤**：技能可以在 frontmatter 里声明依赖的工具，依赖不满足的不显示
+- **session 级 disabled 列表**：用户可以临时禁用某些技能
+- **强制约束**：每个技能的 description 必须 ≤ 60 字符（仓库规范，PR 评审会拒绝过长的）
+
+这套机制让"几百个技能"和"几个相关技能"在 system prompt 里看起来差别不大，规模化的关键就在这里。
+
+---
+
 #### Curator：技能的"自动清洁工"
 
 **为什么需要 Curator？**
 
-学习循环会持续创建和更新技能，但没有清理机制的话，技能库会越来越臃肿：
-- 三个月前解决某个一次性问题的技能，现在已经没用了
-- 同一类任务被创建了多个高度重叠的技能
-- 某个技能的内容随着工具版本升级已经过时
+索引机制让技能数量本身不会撑爆上下文，但仍然有两个问题需要解决：
+- 同一类任务被创建了多个高度重叠的技能（比如 `pdf-extraction`、`docx-extraction`、`pptx-extraction` 各一份），稀释 LLM 注意力
+- 三个月前解决某个一次性问题的技能，现在内容已经过时
 
-技能库越大，每次对话注入的技能列表越长，LLM 的注意力越分散，反而降低质量。Curator 就是为了解决这个问题——**让技能库保持精简和准确**。
+Curator 就是为这两个问题设计的——**保持技能库精简和准确**。它是一个定期运行的独立 Agent（默认每 7 天，Agent 空闲 2 小时后启动）。
 
-Curator 是一个定期运行的独立 Agent（默认每 7 天，Agent 空闲 2 小时后启动）：
+**Curator 的状态流转**
 
+每个 Agent 创建的技能有 `active` / `stale` / `archived` 三种状态，Curator 依据"最后活动时间"自动转换：
+
+```mermaid
+flowchart LR
+    ACT["✅ active<br/>正常状态<br/>出现在索引里"]
+    STALE["⏸ stale<br/>30 天未使用<br/>仍在索引里"]
+    ARCH["🗄 archived<br/>90 天未使用<br/>移到 .archive/<br/>不在索引里"]
+
+    ACT -- "30 天未活动" --> STALE
+    STALE -- "再过 60 天未活动" --> ARCH
+    STALE -- "✨ 被使用，自动 reactivate" --> ACT
+    ARCH -. "hermes curator restore" .-> ACT
+
+    classDef active fill:#f5fff5,stroke:#1f6b1f,color:#0a290a,font-weight:bold
+    classDef stale fill:#fff8d6,stroke:#8a6a00,color:#332600
+    classDef archive fill:#fff5e8,stroke:#a85d00,color:#291600
+
+    class ACT active
+    class STALE stale
+    class ARCH archive
 ```
-扫描所有 Agent 创建的技能
-        ↓
-30 天未使用 → 标记为 stale（过时）
-90 天未使用 → 自动归档到 .archive/（永不删除，可恢复）
-发现重复技能 → 合并
-发现错误内容 → 修复
-```
 
-**关键设计**：Curator **永远不删除**，只归档。用户随时可以 `hermes curator restore` 恢复任何归档的技能。这保证了"清洁"操作是可逆的，不会因为误判而丢失有价值的经验。
+关键设计：
+
+- **stale 状态依然在索引里**，依然会暴露给 LLM。一旦再次使用，Curator 下次运行时检测到，**自动 reactivate 回 active**
+- **archived 状态从索引里移除**，文件保留在 `.archive/` 目录，需要用户主动 `hermes curator restore` 才恢复
+- **永远不删除**，只归档。最坏情况下也能完整恢复
+
+**如果归档的技能再次需要怎么办？**
+
+archived 技能不在索引里，LLM 看不到。这时候有两种结果：
+
+- **大概率**：LLM 把它当新问题处理，可能创建一个新技能。如果新技能内容和某个归档的相似，下次 Curator 运行时会用 LLM review 检测到重复，建议合并
+- **小概率**：LLM 处理得好但没沉淀。归档的就一直归档，但可恢复
+
+**Curator 的 LLM review 还做合并**
+
+不只是按时间归档，Curator 会让一个 LLM 检查所有技能内容，输出两类操作：
+
+- **consolidations**：发现 N 个技能内容重叠，合并成一个 umbrella 技能（例如把 `pdf-extraction`、`docx-extraction`、`pptx-extraction` 合并成 `document-tools`），原技能移进 `.archive/`
+- **prunings**：内容真的过时、没合并目标，直接归档
+
+这是基于内容语义的合并，不是简单字符串匹配。
+
+**设计权衡**
+
+"90 天未使用" 不等于 "永远不会用"——年度审计、季度报告这类低频但关键的技能可能被错误归档。Hermes 接受这个误判，但用三个机制兜底：永远不删除、Curator 跑完会输出 summary 告知用户、可一键 restore。这是务实的工程取舍——完美判断"哪些技能该留"是不可能的，"宁可错杀，可恢复"是最稳的策略。
 
 ---
 
@@ -337,25 +496,34 @@ Hermes 的解法是**三层分离 + 按需检索**：不同类型的记忆用不
 ```mermaid
 flowchart LR
     subgraph L1["🗂 第一层：会话记忆"]
-        A1["存储：state.db SQLite\n内容：所有对话 · 工具调用 · 工具结果\n注入：不自动注入\n召回：LLM 调用 session_search 按需检索"]
+        A1["存储：state.db SQLite<br/>内容：所有对话 · 工具调用 · 工具结果<br/>注入：不自动注入<br/>召回：LLM 调用 session_search 按需检索"]
     end
 
     subgraph L2["🧠 第二层：持久记忆"]
-        B1["存储：MEMORY.md + USER.md\n内容：编码偏好 · 项目习惯 · 工具链\n注入：全量注入 System Prompt\n更新：每轮对话后自动写入"]
+        B1["存储：MEMORY.md + USER.md<br/>内容：编码偏好 · 项目习惯 · 工具链<br/>注入：全量注入 System Prompt<br/>更新：每轮对话后自动写入"]
     end
 
     subgraph L3["⚡ 第三层：Skill 记忆"]
-        C1["存储：~/.hermes/skills/*.md\n内容：方法论 · 操作规范 · 工作流\n注入：索引注入 System Prompt\n召回：LLM 调用 skill_view 加载内容"]
+        C1["存储：~/.hermes/skills/*.md<br/>内容：方法论 · 操作规范 · 工作流<br/>注入：索引注入 System Prompt<br/>召回：LLM 调用 skill_view 加载内容"]
     end
 
-    L1 -. "按需检索" .-> SP["System Prompt\n最终注入 LLM"]
+    L1 -. "按需检索" .-> SP["System Prompt<br/>最终注入 LLM"]
     L2 -- "全量注入" --> SP
     L3 -. "索引+按需" .-> SP
 
-    style L1 fill:#0d1b2a,stroke:#4a9eff,color:#c8d8e8
-    style L2 fill:#0d2a1a,stroke:#4ade80,color:#c8e8d0
-    style L3 fill:#1a0d2a,stroke:#a78bfa,color:#d8c8e8
-    style SP fill:#2a2a0d,stroke:#FFD700,color:#e8e8c0
+    classDef sessionNode fill:#e8f4ff,stroke:#1e6091,color:#0a1929
+    classDef persistNode fill:#f5fff5,stroke:#1f6b1f,color:#0a290a
+    classDef skillNode fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29
+    classDef spNode fill:#fff8d6,stroke:#8a6a00,color:#332600,font-weight:bold
+
+    class A1 sessionNode
+    class B1 persistNode
+    class C1 skillNode
+    class SP spNode
+
+    style L1 fill:#e8f4ff,stroke:#1e6091,color:#0a1929,font-weight:bold
+    style L2 fill:#f5fff5,stroke:#1f6b1f,color:#0a290a,font-weight:bold
+    style L3 fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29,font-weight:bold
 ```
 
 **三层的注入策略完全不同：**
@@ -372,33 +540,37 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    MSG(["💬 新消息到达"]) --> SP["agent/prompt_builder.py\n构建 System Prompt"]
+    MSG(["💬 新消息到达"]) --> SP["构建 System Prompt"]
 
-    SP --> SK["技能索引注入\n只有名称+描述，不含完整内容"]
-    SP --> MEM["prefetch_all()\nagent/memory_manager.py"]
-    MEM --> P1["持久记忆全量注入\nMEMORY.md + USER.md"]
-    MEM --> P2["外部提供商语义召回\nhoncho / mem0 按相关性"]
+    SP --> SK["技能索引注入<br/>只有名称+描述，不含完整内容"]
+    SP --> MEM["记忆预取<br/>memory_manager.prefetch_all"]
+    MEM --> P1["持久记忆全量注入<br/>MEMORY.md + USER.md"]
+    MEM --> P2["外部提供商语义召回<br/>honcho / mem0 按相关性"]
 
-    SK --> FINAL["📋 最终 System Prompt\n身份 + 技能索引 + 记忆块 + 环境信息"]
+    SK --> FINAL["📋 最终 System Prompt<br/>身份 + 技能索引 + 记忆块 + 环境信息"]
     P1 --> FINAL
     P2 --> FINAL
 
     FINAL --> LLM["🤖 LLM 推理"]
 
-    LLM --> T1["skill_view(name)\n加载完整 SKILL.md"]
-    LLM --> T2["session_search(query)\nFTS5 检索 state.db\n命中片段 + Bookend 上下文"]
+    LLM --> T1["skill_view 工具<br/>加载完整 SKILL.md"]
+    LLM --> T2["session_search 工具<br/>FTS5 检索 state.db<br/>命中片段 + Bookend 上下文"]
     LLM --> T3["直接生成回答"]
 
     T1 --> ANS(["✅ 最终回答"])
     T2 --> ANS
     T3 --> ANS
 
-    style MSG fill:#1a1a0d,stroke:#FFD700,color:#e8e8c0
-    style FINAL fill:#0d1b2a,stroke:#4a9eff,color:#c8d8e8
-    style LLM fill:#0d2a1a,stroke:#4ade80,color:#c8e8d0
-    style T1 fill:#1a0d2a,stroke:#a78bfa,color:#d8c8e8
-    style T2 fill:#1a0d2a,stroke:#a78bfa,color:#d8c8e8
-    style ANS fill:#1a1a0d,stroke:#FFD700,color:#e8e8c0
+    classDef startEnd fill:#fff8d6,stroke:#8a6a00,color:#332600,font-weight:bold
+    classDef promptStage fill:#e8f4ff,stroke:#1e6091,color:#0a1929
+    classDef llmStage fill:#f5fff5,stroke:#1f6b1f,color:#0a290a,font-weight:bold
+    classDef toolCall fill:#faf5ff,stroke:#5a2a9b,color:#1a0a29
+
+    class MSG,ANS startEnd
+    class SP,SK,MEM,P1,P2 promptStage
+    class FINAL promptStage
+    class LLM llmStage
+    class T1,T2,T3 toolCall
 ```
 
 #### FTS5 技术实现
@@ -451,6 +623,28 @@ Claude Code 也有记忆系统：CLAUDE.md 文件和 auto-memory。两者的设�
 
 **哪种更好取决于使用场景**：如果你是重度 Claude Code 用户，已经花了几周精心打磨 CLAUDE.md，那你手工编织的缰绳可能比 Hermes 自动生成的更精准。但如果你不想花时间维护配置文件，Hermes 的全自动方案确实省心不少。
 
+#### Honcho 用户建模：可选的"第四层记忆"
+
+前面三层记忆解决的是"对话/项目/方法论"的存储和检索，但还有一类信息它们都无法捕捉：**用户本身的偏好和行为模式**。比如你倾向于直接回答还是先讨论，习惯用 emoji 还是纯文本，关注代码细节还是架构方向——这些不是某次对话的内容，而是跨越所有对话的行为画像。
+
+Honcho 是 Hermes 的可选外部记忆提供商，专门做这件事：
+
+```
+每次对话结束
+    ↓
+Honcho 后台分析这次交互
+    ↓
+推导用户偏好、行为模式、兴趣领域
+    ↓
+更新用户画像（持续累积，不是覆盖）
+    ↓
+下次对话开始时，按相关性召回画像片段注入 system prompt
+```
+
+和持久记忆（MEMORY.md）的关键区别：MEMORY.md 是 Agent 主动总结的事实（"用户偏好 httpx 而不是 requests"），Honcho 是从行为推断的画像（"用户倾向于先看实现再讨论设计"）。前者是显式偏好，后者是隐式行为模式。
+
+Honcho 是一个独立的记忆提供商插件，默认不启用，需要单独配置 API key。Hermes 还内置了其他几种记忆提供商（mem0、supermemory 等），用户可以按需替换。这一层不是 Hermes 的核心功能，但对于追求"越用越懂你"的场景很有价值——也是 1.4 节闭环图里"用户建模"环节的实现。
+
 ---
 
 ### 3.3 多 Agent 协作
@@ -462,17 +656,20 @@ Claude Code 也有记忆系统：CLAUDE.md 文件和 auto-memory。两者的设�
 | MoA 多模型投票 | 多模型并行回答同一问题，聚合结果 | 极难的推理/分析问题 |
 | Background Review | 主 Agent 与 Review Agent 异步分工 | 技能/记忆的自动沉淀 |
 
-#### 父子协作与 Coordinator 模式
+#### delegate_task：父子协作 / Coordinator 模式
+
+delegate_task 是 Hermes 多 Agent 协作的主要机制，下面分三个维度展开：**角色与递归**、**通信方式**、**上下文隔离**。
+
+**角色与递归**
 
 delegate_task 支持两种角色：
 
-**leaf（默认）**：专注执行，不能再委派，不能调用记忆/消息工具。父 Agent 等子 Agent 完成后拿到文字总结继续。
-
-**orchestrator**：子 Agent 自己也能继续 `delegate_task`，形成多层树状结构。默认最大深度 2（父→子→孙），可配置到 3。这就是 Coordinator-Worker 模式——orchestrator 负责拆解和协调，leaf worker 负责执行，orchestrator 自己综合所有 worker 的结果再返回给父 Agent。
+- **leaf（默认）**：专注执行，不能再委派，不能调用记忆/消息工具。父 Agent 等子 Agent 完成后拿到文字总结继续。
+- **orchestrator**：子 Agent 自己也能继续 `delegate_task`，形成多层树状结构。默认最大深度 2（父→子→孙），可配置到 3。这就是 Coordinator-Worker 模式——orchestrator 负责拆解和协调，leaf worker 负责执行，orchestrator 自己综合所有 worker 的结果再返回给父 Agent。
 
 支持批量并行：一次委派多个子任务，多个子 Agent 在独立线程中同时执行，父 Agent 等所有子 Agent 完成后汇总，并发数可配置（默认 3）。
 
-#### 父子 Agent 的通信方式
+**通信方式**
 
 Hermes 的父子通信是**同步直接调用**：父 Agent 在线程池里直接调用 `child.run_conversation(goal)`，阻塞等待返回。子 Agent 完成后把最终回答作为文字结果返回给父 Agent，父 Agent 只看到这段文字总结，看不到子 Agent 的中间工具调用和推理过程。
 
@@ -480,7 +677,7 @@ Hermes 的父子通信是**同步直接调用**：父 Agent 在线程池里直�
 
 这和 Claude Code 的设计思路不同。Claude Code 用消息队列：父 Agent 调 SendMessage 工具把消息写进子 Agent 的"信箱"，子 Agent 在自己的循环边界自己来取；子 Agent 完成后把结果拼成 XML 伪装成用户消息注入父 Agent 的对话。这种异步消息驱动的好处是父 Agent 不阻塞，可以同时派多个子 Agent 并发，谁先完成谁先通知。Hermes 的同步方案更简单，但父 Agent 在等待期间无法处理其他事情。
 
-#### 上下文隔离设计
+**上下文隔离**
 
 子 Agent 完全隔离：独立的上下文（看不到父 Agent 的对话历史）、独立的终端会话（文件操作互不干扰）、独立的 system prompt（只包含任务目标，不共享父 Agent 的 system prompt）。
 
@@ -494,7 +691,7 @@ Claude Code 为此专门设计了 Fork Subagent 机制：子 Agent 的 system pr
 
 #### Background Review：异步自我复盘
 
-主对话结束后，后台 fork 一个独立的 Review Agent，回顾完整对话记录，决定是否创建新 Skill、更新已有 Skill、或写入持久记忆。主对话零延迟，用户不感知。
+主对话结束后，后台启动一个独立的 Review Agent（运行在 daemon 线程中），回顾完整对话记录，决定是否创建新 Skill、更新已有 Skill、或写入持久记忆。主对话零延迟，用户不感知。
 
 主 Agent 负责执行任务，Review Agent 负责从执行过程中提炼经验，两者分工明确，时序上异步。Review Agent 的优先级策略是优先 patch 已有 Skill，而不是无限新建，避免技能库膨胀。
 
@@ -575,7 +772,7 @@ Hermes 这个名字源自希腊神话的信使之神，手持双蛇缠绕的权�
 │  通过经验和偏好引导 Agent 决策，模型可选择是否遵守     │
 ├────────────────────────────────────────────────────────┤
 │  能力缰绳（约束工具）                                   │
-│  Toolset 过滤 · 子 Agent 工具继承 · 危险工具黑名单     │
+│  Toolset 过滤 · 子 Agent 工具继承 · 子 Agent 硬封锁名单 │
 │  决定 Agent 能干什么、不能干什么                       │
 ├────────────────────────────────────────────────────────┤
 │  资源缰绳（约束消耗）                                   │
@@ -584,7 +781,7 @@ Hermes 这个名字源自希腊神话的信使之神，手持双蛇缠绕的权�
 ├────────────────────────────────────────────────────────┤
 │  硬缰绳（绝对边界）                                     │
 │  危险命令审批 · 子 Agent 自动拒绝 · YOLO 模式冻结      │
-│  人在回路的最后防线，Agent 无法绕过                     │
+│  人工确认——最后防线，Agent 无法绕过                     │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -602,7 +799,7 @@ Hermes 这个名字源自希腊神话的信使之神，手持双蛇缠绕的权�
 
 - **Toolset 过滤**：CLI 会话和 Telegram 会话可以看到完全不同的工具集，cron 任务可以禁用所有交互工具
 - **子 Agent 工具继承**：子不能拿到父没有的工具，防止能力越权（详见 3.4）
-- **危险工具黑名单**：子 Agent 永远拿不到 `delegate_task`、`memory`、`send_message` 等会污染父状态的工具
+- **子 Agent 硬封锁名单**：子 Agent 永远拿不到 `delegate_task`、`memory`、`send_message` 等会污染父状态的工具
 
 这一层是结构性的——Agent 看不到的工具就调不到，从源头上消除某些风险。
 
@@ -720,9 +917,9 @@ cat ~/.hermes/skills/python-project-analysis/SKILL.md
 
 *基于 hermes-agent main 分支（2026-05）· MIT License · [GitHub](https://github.com/NousResearch/hermes-agent)*
 
-## 5.实践&思考总结
+## 5.实践&思考
 
-1.skill 自己沉淀，fork子进程，skill的能力的支持
+1.skill 自己沉淀，启动 daemon 线程跑 Review Agent，skill 的能力的支持
 
 2.检索关键记忆的方式，优化prompt的构建
 
